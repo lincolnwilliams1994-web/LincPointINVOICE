@@ -95,7 +95,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;ba
 .idoc-fhr{border:none;border-top:1px solid #ddd;}
 .idoc-ft{text-align:center;font-size:10.5px;color:#999;margin-top:7px;}
 @media print{body{background:#fff;}.no-print{display:none!important;}.idoc{padding:0;box-shadow:none;border-radius:0;}}
-@media(max-width:400px){.idoc-parties{flex-direction:column;}.preview-bar .btn-back,.preview-bar .btn-dl,.preview-bar .btn-save{font-size:12px;padding:11px 6px;}}
+@media(max-width:600px){
+  .idoc{padding:16px 14px;}
+  .idoc-logo{height:52px;}
+  .idoc-title{font-size:20px;}
+  .idoc-parties{flex-direction:column;gap:10px;}
+  .idoc-party{font-size:12px;}
+  .idoc-ft{font-size:10px;padding:0 8px;}
+  .preview-bar .btn-back,.preview-bar .btn-dl,.preview-bar .btn-save{font-size:13px;padding:11px 8px;}
+}
 </style>
 </head>
 <body>
@@ -128,7 +136,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;ba
 <div class="page" id="page-preview">
   <div class="no-print">
     <div class="preview-bar">
-      <button class="btn-back" onclick="showTab('new')">Edit</button>
+      <button class="btn-back" onclick="editPending()">Edit</button>
       <button class="btn-dl" onclick="doDownload()">Download PDF</button>
       <button class="btn-save" onclick="doSave()">Save</button>
     </div>
@@ -295,7 +303,7 @@ function renderInv(inv){
     +'<div class="idoc-meta"><strong>Invoice Number:</strong> '+ref+'<br><strong>Invoice Date:</strong> '+inv.date+'<br><strong>Due Date:</strong> '+inv.date+'</div></div></div>'
     +'<hr class="idoc-hr">'
     +'<div class="idoc-parties">'
-    +'<div class="idoc-party"><div class="idoc-plbl">From</div>'+FROM.name+'<br><span style="color:#666;font-size:12px;">'+FROM.trading+'</span><br>ABN: '+FROM.abn+'<br>'+FROM.gst+'<br><span style="color:#666;font-size:12px;">'+FROM.address+'<br>'+FROM.phone+' | '+FROM.email+'</span></div>'
+    +'<div class="idoc-party"><div class="idoc-plbl">From</div>'+FROM.name+'<br><span style="color:#666;font-size:12px;">'+FROM.trading+'</span><br>ABN: '+FROM.abn+'<br>'+FROM.gst+'<br><span style="color:#666;font-size:12px;">'+FROM.address+'<br>'+FROM.phone+'<br>'+FROM.email+'</span></div>'
     +'<div class="idoc-party"><div class="idoc-plbl">Bill To</div><strong>'+bname+'</strong>'+(babn?"<br>ABN: "+babn:"")+(baddr?"<br><span style='color:#666;font-size:12px;'>"+baddr+"</span>":"")+'</div></div>'
     +'<table class="idoc-tbl"><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'<div class="idoc-tots"><div class="idoc-tbox">'
@@ -305,6 +313,20 @@ function renderInv(inv){
     +'<div class="idoc-pay"><div class="idoc-plbl2">Payment Details</div>'+BANK.bank+'<br>Account Name: '+BANK.name+'<br>BSB: '+BANK.bsb+'<br>Account Number: '+BANK.account+'<br>Payment Reference: '+ref+'</div>'
     +'<div style="margin-bottom:18px;font-size:13px;">Thank you for your business.</div>'
     +'<hr class="idoc-fhr"><div class="idoc-ft">'+FROM.name+' | ABN '+FROM.abn+' | Invoice '+ref+'</div></div>';
+}
+function editPending(){
+  if(!pending)return;
+  selClient=pending.clientId;
+  renderPills();
+  document.getElementById("f-date").value=pending.date;
+  if(pending.clientId==="other"){
+    document.getElementById("f-cname").value=pending.customClient||"";
+    document.getElementById("f-cabn").value=pending.customABN||"";
+  }
+  document.getElementById("litems").innerHTML="";
+  pending.lines.forEach(function(l){addLine(l.description,l.amount);});
+  calcTotal();updateRef();
+  showTab("new");
 }
 function doDownload(){
   var inv=pending||(viewIdx>=0?invoices[viewIdx]:null);
