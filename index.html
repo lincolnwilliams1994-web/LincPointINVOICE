@@ -69,6 +69,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;ba
 .modal-title{font-size:17px;font-weight:800;color:var(--blue);margin-bottom:16px;}
 .modal-acts{display:flex;gap:10px;margin-top:16px;}
 .empty{text-align:center;padding:48px 20px;color:#bbb;}
+.paid-stamp{display:inline-block;color:#1a7a3c;font-size:28px;font-weight:900;border:4px solid #1a7a3c;border-radius:6px;padding:4px 14px;transform:rotate(-8deg);letter-spacing:2px;opacity:0.85;margin:10px auto;text-transform:uppercase;}
+.unpaid-badge{display:inline-block;color:#cc3300;font-size:13px;font-weight:800;border:2px solid #cc3300;border-radius:4px;padding:3px 10px;letter-spacing:1px;margin:10px auto;}
 .empty-icon{font-size:44px;margin-bottom:10px;}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:200;opacity:0;transition:opacity 0.25s;pointer-events:none;}
 .toast.show{opacity:1;}
@@ -403,7 +405,9 @@ function renderHist(){
       +'<div class="hist-desc">'+inv.lines.map(function(l){return l.description;}).join(" | ")+'</div></div>'
       +'<div class="hist-r"><div class="hist-amt">'+money(t)+'</div>'
       +'<button class="btn-view" onclick="viewInv('+ri+')">View</button>'
-      +'<button class="btn-del" onclick="delInv('+ri+')">Delete</button></div></div>';
+      +'<button class="btn-del" onclick="delInv('+ri+')">Delete</button>'
+      +(inv.paid?'<span style="color:#1a7a3c;font-size:11px;font-weight:800;border:2px solid #1a7a3c;border-radius:4px;padding:2px 7px;transform:rotate(-8deg);display:inline-block;">&#10003; PAID</span>':'<span style="color:#cc3300;font-size:11px;font-weight:700;">UNPAID</span>')
+      +'</div></div>';
   }).join("");
 }
 function viewInv(idx){
@@ -422,6 +426,22 @@ function viewInv(idx){
   document.querySelector(".btn-dl").onclick=function(){editHistInv(idx);};
   document.querySelector(".btn-save").textContent="Download PDF";
   document.querySelector(".btn-save").onclick=doDownload;
+  // Show paid stamp or unpaid on invoice render
+  var stamp=document.getElementById("paid-stamp-area");
+  if(stamp)stamp.parentNode.removeChild(stamp);
+  var sa=document.createElement("div");
+  sa.id="paid-stamp-area";
+  sa.style.cssText="text-align:center;padding:8px 0 0;";
+  if(inv.paid){
+    sa.innerHTML='<div class="paid-stamp">&#10003; PAID</div>';
+  } else {
+    sa.innerHTML='<div class="unpaid-badge">UNPAID</div>'
+      +'<button onclick="togglePaid('+idx+')" style="display:block;margin:8px auto 0;padding:10px 28px;background:#1a7a3c;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">Mark as Paid</button>';
+  }
+  setTimeout(function(){
+    var render=document.getElementById("inv-render");
+    if(render)render.appendChild(sa);
+  },50);
   showTab("preview");
 }
 function editHistInv(idx){
@@ -471,6 +491,15 @@ function resetPreviewBtns(){
   document.querySelector(".btn-dl").onclick=doDownload;
   document.querySelector(".btn-save").textContent="Save";
   document.querySelector(".btn-save").onclick=doSave;
+}
+function togglePaid(idx){
+  var inv=invoices[idx]; if(!inv)return;
+  inv.paid=!inv.paid;
+  invoices[idx]=inv; saveD();
+  toast(inv.paid?"Marked as Paid.":"Marked as Unpaid.");
+  // If viewing this invoice, re-render
+  if(viewIdx===idx) viewInv(idx);
+  else renderHist();
 }
 function delInv(idx){
   if(!confirm("Delete this invoice?"))return;
