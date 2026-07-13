@@ -12,7 +12,7 @@
 :root{--blue:#003399;--orange:#e85d10;--light:#f0f2f7;--white:#fff;--border:#dde2ee;}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--light);color:#222;min-height:100vh;font-size:16px;}
 .nav{background:var(--blue);display:flex;align-items:center;padding:0 12px;position:sticky;top:0;z-index:50;height:54px;}
-.nav-logo{height:36px;filter:brightness(0) invert(1);margin-right:10px;}
+.nav-logo{height:36px;margin-right:10px;}
 .nav-tabs{display:flex;flex:1;overflow-x:auto;scrollbar-width:none;}
 .nav-tabs::-webkit-scrollbar{display:none;}
 .nav-tab{background:transparent;color:rgba(255,255,255,0.65);border:none;border-bottom:3px solid transparent;padding:16px 14px 13px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;font-family:inherit;}
@@ -147,7 +147,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;ba
 
 <div class="page" id="page-history">
   <div class="summary-bar" id="hsum" style="display:none;"><div><div class="lbl">Total invoiced</div><div class="val" id="htotal">$0.00</div></div><div style="text-align:right;"><div class="lbl">Invoices</div><div class="val" id="hcount">0</div></div></div>
-  <select class="filt" id="hfilt" onchange="renderHist()"><option value="all">All clients</option></select>
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <select class="filt" id="hfilt" onchange="renderHist()" style="margin-bottom:0;flex:1;">  <option value="all">All clients</option></select>
+    <select class="filt" id="hfilt-month" onchange="renderHist()" style="margin-bottom:0;flex:1;"><option value="all">All months</option></select>
+  </div>
   <div class="card" id="hlist"></div>
 </div>
 
@@ -359,16 +362,36 @@ function buildHistFilt(){
   var s=document.getElementById("hfilt"); var v=s.value;
   s.innerHTML='<option value="all">All clients</option>'+clients.map(function(c){return'<option value="'+c.id+'">'+c.name+'</option>';}).join('')+'<option value="other">Other</option>';
   s.value=v;
+  // Build month filter from existing invoices
+  var ms=document.getElementById("hfilt-month"); var mv=ms.value;
+  var months={};
+  invoices.forEach(function(i){
+    var p=i.date?i.date.split("/"):[];
+    if(p.length===3){var key=p[1]+"/"+p[2];months[key]=1;}
+  });
+  var mkeys=Object.keys(months).sort().reverse();
+  var mnames=["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  ms.innerHTML='<option value="all">All months</option>'+mkeys.map(function(k){
+    var parts=k.split("/"); var mn=parseInt(parts[0],10); var yr=parts[1];
+    return '<option value="'+k+'">'+(mnames[mn]||parts[0])+' '+yr+'</option>';
+  }).join("");
+  ms.value=mv;
 }
 function renderHist(){
   var filt=document.getElementById("hfilt").value;
-  var list=filt==="all"?invoices:invoices.filter(function(i){return i.clientId===filt;});
-  var total=invoices.reduce(function(s,i){return s+sumLines(i.lines);},0);
+  var mfilt=document.getElementById("hfilt-month").value;
+  var list=invoices.filter(function(i){
+    var cm=filt==="all"||i.clientId===filt;
+    var mm=true;
+    if(mfilt!=="all"){var p=i.date?i.date.split("/"):[];mm=p.length===3&&(p[1]+"/"+p[2])===mfilt;}
+    return cm&&mm;
+  });
+  var total=list.reduce(function(s,i){return s+sumLines(i.lines);},0);
   var sb=document.getElementById("hsum");
-  if(invoices.length){sb.style.display="flex";document.getElementById("htotal").textContent=money(total);document.getElementById("hcount").textContent=invoices.length;}
+  if(invoices.length){sb.style.display="flex";document.getElementById("htotal").textContent=money(total);document.getElementById("hcount").textContent=list.length;}
   else sb.style.display="none";
   var box=document.getElementById("hlist");
-  if(!list.length){box.innerHTML='<div class="empty"><div class="empty-icon">&#128203;</div><p>No invoices yet.</p></div>';return;}
+  if(!list.length){box.innerHTML='<div class="empty"><div class="empty-icon">&#128203;</div><p>No invoices match.</p></div>';return;}
   box.innerHTML=list.map(function(inv){
     var ri=invoices.indexOf(inv);
     var c=clients.find(function(x){return x.id===inv.clientId;})||null;
@@ -390,9 +413,64 @@ function viewInv(idx){
   var c=clients.find(function(x){return x.id===inv.clientId;})||null;
   var hint=c&&c.email?"<strong>Send to:</strong> "+c.email:"";
   var eh=document.getElementById("ehint"); eh.innerHTML=hint; eh.style.display=hint?"block":"none";
-  document.querySelector(".btn-save").textContent="Done";
-  document.querySelector(".btn-save").onclick=function(){document.querySelector(".btn-save").textContent="Save";document.querySelector(".btn-save").onclick=doSave;showTab("history");};
+  document.querySelector(".btn-back").textContent="Back";
+  document.querySelector(".btn-back").onclick=function(){
+    resetPreviewBtns();
+    showTab("history");
+  };
+  document.querySelector(".btn-dl").textContent="Edit";
+  document.querySelector(".btn-dl").onclick=function(){editHistInv(idx);};
+  document.querySelector(".btn-save").textContent="Download PDF";
+  document.querySelector(".btn-save").onclick=doDownload;
   showTab("preview");
+}
+function editHistInv(idx){
+  var inv=invoices[idx]; if(!inv)return;
+  viewIdx=idx;
+  selClient=inv.clientId;
+  renderPills();
+  document.getElementById("f-date").value=inv.date;
+  if(inv.clientId==="other"){
+    document.getElementById("f-cname").value=inv.customClient||"";
+    document.getElementById("f-cabn").value=inv.customABN||"";
+  }
+  document.getElementById("litems").innerHTML="";
+  inv.lines.forEach(function(l){addLine(l.description,l.amount);});
+  calcTotal();
+  document.getElementById("f-ref").textContent=inv.ref||"";
+  var btn=document.querySelector(".btn-gen");
+  btn.textContent="Update Invoice";
+  btn.onclick=function(){saveHistEdit(idx);};
+  showTab("new");
+}
+function saveHistEdit(idx){
+  var lines=getLines();
+  if(!lines.length){toast("Add at least one line item.");return;}
+  var inv=invoices[idx]; if(!inv)return;
+  inv.lines=lines;
+  inv.date=normDate(document.getElementById("f-date").value||today());
+  if(inv.clientId==="other"){
+    inv.customClient=document.getElementById("f-cname").value.trim()||"Client";
+    inv.customABN=document.getElementById("f-cabn").value.trim()||"";
+  }
+  invoices[idx]=inv; saveD();
+  toast("Invoice updated.");
+  var btn=document.querySelector(".btn-gen");
+  btn.textContent="Generate Invoice"; btn.onclick=doGenerate;
+  resetPreviewBtns();
+  renderInv(inv);
+  var c=clients.find(function(x){return x.id===inv.clientId;})||null;
+  var hint=c&&c.email?"<strong>Send to:</strong> "+c.email:"";
+  var eh=document.getElementById("ehint"); eh.innerHTML=hint; eh.style.display=hint?"block":"none";
+  showTab("preview");
+}
+function resetPreviewBtns(){
+  document.querySelector(".btn-back").textContent="Edit";
+  document.querySelector(".btn-back").onclick=editPending;
+  document.querySelector(".btn-dl").textContent="Download PDF";
+  document.querySelector(".btn-dl").onclick=doDownload;
+  document.querySelector(".btn-save").textContent="Save";
+  document.querySelector(".btn-save").onclick=doSave;
 }
 function delInv(idx){
   if(!confirm("Delete this invoice?"))return;
