@@ -148,7 +148,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;ba
 </div>
 
 <div class="page" id="page-history">
-  <div class="summary-bar" id="hsum" style="display:none;"><div><div class="lbl">Total invoiced</div><div class="val" id="htotal">$0.00</div></div><div style="text-align:right;"><div class="lbl">Invoices</div><div class="val" id="hcount">0</div></div></div>
+  <div id="hsum" style="display:none;margin-bottom:12px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div onclick="filterByStatus('all')" style="background:var(--blue);color:#fff;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;">
+        <div style="font-size:11px;opacity:0.8;margin-bottom:4px;">INVOICED</div>
+        <div style="font-size:17px;font-weight:800;color:#ffcc00;" id="htotal">$0.00</div>
+      </div>
+      <div onclick="filterByStatus('paid')" style="background:#1a7a3c;color:#fff;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;">
+        <div style="font-size:11px;opacity:0.8;margin-bottom:4px;">PAID</div>
+        <div style="font-size:17px;font-weight:800;color:#a8f0c0;" id="hpaid">$0.00</div>
+      </div>
+      <div onclick="filterByStatus('unpaid')" style="background:#cc3300;color:#fff;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;">
+        <div style="font-size:11px;opacity:0.8;margin-bottom:4px;">OWED</div>
+        <div style="font-size:17px;font-weight:800;color:#ffd0c8;" id="howed">$0.00</div>
+      </div>
+    </div>
+  </div>
   <div style="display:flex;gap:8px;margin-bottom:12px;">
     <select class="filt" id="hfilt" onchange="renderHist()" style="margin-bottom:0;flex:1;">  <option value="all">All clients</option></select>
     <select class="filt" id="hfilt-month" onchange="renderHist()" style="margin-bottom:0;flex:1;"><option value="all">All months</option></select>
@@ -163,6 +178,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;ba
 
 </div>
 
+<div class="modal-bg" id="paid-modal" style="display:none;" onclick="if(event.target===this)closePaidModal()">
+  <div class="modal-box">
+    <div class="modal-title">Mark as Paid</div>
+    <div class="field"><label>Date Paid</label><input type="text" id="paid-date" placeholder="dd/mm/yyyy"></div>
+    <div class="modal-acts">
+      <button style="flex:1;padding:13px;background:#fff;color:var(--blue);border:2px solid var(--blue);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;" onclick="closePaidModal()">Cancel</button>
+      <button style="flex:2;padding:13px;background:#1a7a3c;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;" onclick="confirmPaid()">Confirm Paid</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="cmodal" style="display:none;" onclick="if(event.target===this)closeCM()">
   <div class="modal-box">
     <div class="modal-title" id="cm-title">Add Client</div>
@@ -222,7 +247,7 @@ function showTab(t){
     document.getElementById("page-"+x).classList.toggle("active",x===t);
     var b=document.getElementById("tab-"+x);if(b)b.classList.toggle("active",x===t);
   });
-  if(t==="history"){buildHistFilt();renderHist();}
+  if(t==="history"){statusFilter="all";buildHistFilt();renderHist();}
   if(t==="clients")renderClients();
 }
 function renderPills(){
@@ -386,12 +411,19 @@ function renderHist(){
     var cm=filt==="all"||i.clientId===filt;
     var mm=true;
     if(mfilt!=="all"){var p=i.date?i.date.split("/"):[];mm=p.length===3&&(p[1]+"/"+p[2])===mfilt;}
-    return cm&&mm;
+    var sm=statusFilter==="all"||(statusFilter==="paid"&&i.paid)||(statusFilter==="unpaid"&&!i.paid);
+    return cm&&mm&&sm;
   });
-  var total=list.reduce(function(s,i){return s+sumLines(i.lines);},0);
+  var totalAll=invoices.reduce(function(s,i){return s+sumLines(i.lines);},0);
+  var totalPaid=invoices.filter(function(i){return i.paid;}).reduce(function(s,i){return s+sumLines(i.lines);},0);
+  var totalOwed=invoices.filter(function(i){return !i.paid;}).reduce(function(s,i){return s+sumLines(i.lines);},0);
   var sb=document.getElementById("hsum");
-  if(invoices.length){sb.style.display="flex";document.getElementById("htotal").textContent=money(total);document.getElementById("hcount").textContent=list.length;}
-  else sb.style.display="none";
+  if(invoices.length){
+    sb.style.display="block";
+    document.getElementById("htotal").textContent=money(totalAll);
+    document.getElementById("hpaid").textContent=money(totalPaid);
+    document.getElementById("howed").textContent=money(totalOwed);
+  } else sb.style.display="none";
   var box=document.getElementById("hlist");
   if(!list.length){box.innerHTML='<div class="empty"><div class="empty-icon">&#128203;</div><p>No invoices match.</p></div>';return;}
   box.innerHTML=list.map(function(inv){
@@ -433,7 +465,9 @@ function viewInv(idx){
   sa.id="paid-stamp-area";
   sa.style.cssText="text-align:center;padding:8px 0 0;";
   if(inv.paid){
-    sa.innerHTML='<div class="paid-stamp">&#10003; PAID</div>';
+    sa.innerHTML='<div class="paid-stamp">&#10003; PAID</div>'
+      +(inv.paidDate?'<div style="font-size:12px;color:#1a7a3c;margin-top:4px;">Paid: '+inv.paidDate+'</div>':'')
+      +'<button onclick="togglePaid('+idx+')" style="display:block;margin:8px auto 0;padding:8px 20px;background:#eee;color:#555;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Mark as Unpaid</button>';
   } else {
     sa.innerHTML='<div class="unpaid-badge">UNPAID</div>'
       +'<button onclick="togglePaid('+idx+')" style="display:block;margin:8px auto 0;padding:10px 28px;background:#1a7a3c;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">Mark as Paid</button>';
@@ -492,14 +526,42 @@ function resetPreviewBtns(){
   document.querySelector(".btn-save").textContent="Save";
   document.querySelector(".btn-save").onclick=doSave;
 }
+var paidModalIdx=-1;
 function togglePaid(idx){
+  // If already paid, toggle off
   var inv=invoices[idx]; if(!inv)return;
-  inv.paid=!inv.paid;
+  if(inv.paid){
+    inv.paid=false; inv.paidDate="";
+    invoices[idx]=inv; saveD();
+    toast("Marked as Unpaid.");
+    if(viewIdx===idx) viewInv(idx);
+    else renderHist();
+  } else {
+    // Show date picker modal
+    paidModalIdx=idx;
+    document.getElementById("paid-date").value=today();
+    document.getElementById("paid-modal").style.display="flex";
+  }
+}
+function closePaidModal(){document.getElementById("paid-modal").style.display="none";paidModalIdx=-1;}
+function confirmPaid(){
+  var idx=paidModalIdx; if(idx<0)return;
+  var inv=invoices[idx]; if(!inv)return;
+  var pd=document.getElementById("paid-date").value.trim();
+  inv.paid=true; inv.paidDate=normDate(pd)||today();
   invoices[idx]=inv; saveD();
-  toast(inv.paid?"Marked as Paid.":"Marked as Unpaid.");
-  // If viewing this invoice, re-render
+  closePaidModal();
+  toast("Paid on "+inv.paidDate);
   if(viewIdx===idx) viewInv(idx);
   else renderHist();
+}
+var statusFilter="all";
+function filterByStatus(s){
+  statusFilter=s;
+  // Reset other filters
+  document.getElementById("hfilt").value="all";
+  document.getElementById("hfilt-month").value="all";
+  renderHist();
 }
 function delInv(idx){
   if(!confirm("Delete this invoice?"))return;
