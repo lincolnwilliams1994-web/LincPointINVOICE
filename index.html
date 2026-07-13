@@ -503,24 +503,54 @@ function renderHistory(){
     var billName=inv.clientId==="other"?(inv.customClient||"Client"):(client?client.name:"Unknown");
     var t=totalLines(inv.lines);
     var realIdx=invoices.indexOf(inv);
-    return'<div class="hist-item"><div style="flex:1;min-width:0;"><div class="hist-ref">'+(inv.ref||"INV")+'</div><div class="hist-meta">'+inv.date+' - '+billName+'</div><div class="hist-desc">'+inv.lines.map(function(l){return l.description;}).join(" | ")+'</div></div><div class="hist-right"><div class="hist-amount">'+fmt(t)+'</div><button class="btn-view" onclick="viewHistInv('+realIdx+')">View</button></div></div>';
+    return'<div class="hist-item"><div style="flex:1;min-width:0;"><div class="hist-ref">'+(inv.ref||"INV")+'</div><div class="hist-meta">'+inv.date+' - '+billName+'</div><div class="hist-desc">'+inv.lines.map(function(l){return l.description;}).join(" | ")+'</div></div><div class="hist-right"><div class="hist-amount">'+fmt(t)+'</div><button class="btn-view" onclick="viewHistInv('+realIdx+')">View</button><button class="btn-del" style="padding:7px 13px;font-size:12px;" onclick="deleteHistInv('+realIdx+')">Del</button></div></div>';
   }).join("");
 }
 function viewHistInv(idx){
   var inv=invoices[idx];if(!inv)return;
-  var prev=pendingInvoice;
+  currentHistIdx=idx;
   pendingInvoice=null;
   renderInvoiceDoc(inv);
   var client=clients.find(function(c){return c.id===inv.clientId;})||null;
   var hint=client&&client.email?'<strong>Send to:</strong> '+client.email:"";
   document.getElementById("email-hint").innerHTML=hint;
   document.getElementById("email-hint").style.display=hint?"block":"none";
+  // Swap buttons for history view mode
+  document.querySelector(".btn-save-hist").textContent="Delete";
+  document.querySelector(".btn-save-hist").style.background="#cc3300";
+  document.querySelector(".btn-save-hist").onclick=function(){deleteHistInv(currentHistIdx);};
+  document.querySelector(".btn-back").textContent="Close";
+  document.querySelector(".btn-back").onclick=function(){
+    resetPreviewButtons();
+    showTab("history");
+  };
+  document.querySelector(".btn-download").onclick=function(){downloadHistPDF(currentHistIdx);};
   showTab("preview");
-  // In history view mode, save button becomes close
-  document.querySelector(".btn-save-hist").textContent="Done";
-  document.querySelector(".btn-save-hist").onclick=function(){showTab("history");document.querySelector(".btn-save-hist").textContent="Save";document.querySelector(".btn-save-hist").onclick=saveToHistory;};
+}
+function deleteHistInv(idx){
+  if(!confirm("Delete this invoice?"))return;
+  invoices.splice(idx,1);
+  saveData();
+  toast("Invoice deleted.");
+  resetPreviewButtons();
+  showTab("history");
+}
+function downloadHistPDF(idx){
+  var inv=invoices[idx];if(!inv)return;
+  var prev=pendingInvoice;
+  pendingInvoice=inv;
+  downloadPDF();
   pendingInvoice=prev;
 }
+function resetPreviewButtons(){
+  document.querySelector(".btn-save-hist").textContent="Save";
+  document.querySelector(".btn-save-hist").style.background="";
+  document.querySelector(".btn-save-hist").onclick=saveToHistory;
+  document.querySelector(".btn-back").textContent="Edit";
+  document.querySelector(".btn-back").onclick=editPending;
+  document.querySelector(".btn-download").onclick=downloadPDF;
+}
+var currentHistIdx=-1;
 
 // CLIENTS
 function renderClients(){
